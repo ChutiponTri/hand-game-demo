@@ -692,8 +692,8 @@ flappy:{
       F.pipes.push({x:W+30,top,gap,scored:false});
     }
     // Physics: GRIP = bird goes UP, RELEASE = bird falls DOWN
-    const GRAVITY=0.38;
-    const LIFT=-0.32;
+    const GRAVITY=0.15;
+    const LIFT=-0.2;
     const accel=isGripping?LIFT:GRAVITY;
     F.bVy=Math.max(-6,Math.min(7,F.bVy+accel*(dt/16)));
     F.bY+=F.bVy*(dt/16);

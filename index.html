@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GripRehab — Hand Therapy Games</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#07090f;--surface:#0d1117;--card:#111827;--card2:#161f30;
+  --accent:#3b82f6;--cyan:#06b6d4;--green:#22c55e;--orange:#f97316;--rose:#f43f5e;
+  --text:#f1f5f9;--sub:#94a3b8;--muted:#475569;--border:rgba(255,255,255,0.06);
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif}
+#app{display:grid;grid-template-rows:52px 1fr;height:100vh}
+
+/* TOPBAR */
+#topbar{
+  display:flex;align-items:center;gap:14px;padding:0 18px;
+  background:var(--surface);border-bottom:1px solid var(--border);z-index:50;flex-shrink:0;
+}
+.logo{font-weight:700;font-size:1.1rem;letter-spacing:-.3px}
+.logo b{color:var(--cyan)}
+.topbar-sep{flex:1}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;
+  font-size:.72rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;}
+.pill-cyan{background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.25);color:var(--cyan)}
+.pill-green{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);color:var(--green)}
+#handStatus{transition:all .2s}
+#fpsTag{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--muted)}
+
+/* MAIN */
+#main{display:grid;grid-template-columns:216px 1fr;overflow:hidden}
+#sidebar{
+  background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow-y:auto;
+}
+#sidebar::-webkit-scrollbar{width:3px}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.sb-section{padding:14px 14px 10px;border-bottom:1px solid var(--border)}
+.sb-label{font-size:.67rem;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:10px}
+
+/* Grip arc */
+#gripMeterWrap{padding:14px 14px 10px;border-bottom:1px solid var(--border)}
+.grip-arc-wrap{display:flex;justify-content:center;margin-bottom:10px;position:relative}
+#gripArcSvg{display:block}
+.grip-arc-val{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;}
+.grip-arc-val .pct{font-size:1.35rem;font-weight:700;line-height:1}
+.grip-arc-val .lbl{font-size:.6rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.state-bar{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);font-size:.78rem;font-weight:600;
+  transition:all .15s;justify-content:center}
+.state-bar .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+/* Threshold */
+.thresh-row{display:flex;align-items:center;gap:6px;margin:8px 0 4px;font-size:.7rem;color:var(--sub)}
+.thresh-row input{flex:1;accent-color:var(--cyan);cursor:pointer}
+.thresh-note{display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted)}
+
+/* Stats */
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:10px 14px}
+.stat-box{background:var(--card);border:1px solid var(--border);border-radius:9px;
+  padding:9px;text-align:center}
+.stat-box .v{font-family:'JetBrains Mono',monospace;font-size:1.15rem;font-weight:700;line-height:1}
+.stat-box .k{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-top:3px}
+.rep-wrap{padding:6px 14px 12px}
+.rep-header{display:flex;justify-content:space-between;margin-bottom:5px;font-size:.7rem}
+.rep-track{height:5px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden}
+.rep-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--green));border-radius:3px;transition:width .3s}
+
+/* Games list */
+.game-list{display:flex;flex-direction:column;gap:3px;padding:8px}
+.gc{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:9px;
+  cursor:pointer;transition:all .14s;border:1px solid transparent;}
+.gc:hover{background:rgba(255,255,255,.04)}
+.gc.active{background:rgba(6,182,212,.07);border-color:rgba(6,182,212,.25)}
+.gc .gicon{font-size:1.1rem;flex-shrink:0;width:26px;text-align:center}
+.gc .gtitle{font-size:.81rem;font-weight:600}
+.gc .gsub{font-size:.66rem;color:var(--muted)}
+.sb-btn{margin:8px 14px 12px;background:rgba(255,255,255,.05);border:1px solid var(--border);
+  color:var(--sub);border-radius:8px;padding:7px;font-family:'Space Grotesk',sans-serif;
+  font-size:.77rem;font-weight:600;cursor:pointer;width:calc(100% - 28px);transition:all .15s;}
+.sb-btn:hover{background:rgba(255,255,255,.09);color:var(--text)}
+.rehab-tip{padding:10px 14px 14px;margin-top:auto;border-top:1px solid var(--border)}
+.rehab-tip p{font-size:.7rem;color:var(--sub);line-height:1.55}
+
+/* ── GAME AREA ── */
+#gameArea{position:relative;overflow:hidden;background:var(--bg)}
+#gameCanvas{display:block;width:100%;height:100%}
+
+/* Camera PiP */
+#camPip{
+  position:absolute;top:14px;left:14px;z-index:40;width:172px;
+  background:var(--surface);border:1px solid var(--border);border-radius:11px;
+  overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.55);
+  transition:width .2s ease;
+}
+#camPip:hover{width:248px}
+.pip-top{display:flex;align-items:center;gap:6px;padding:5px 9px;
+  background:rgba(0,0,0,.35);border-bottom:1px solid var(--border);}
+.pip-dot{width:7px;height:7px;border-radius:50%;background:#475569;flex-shrink:0}
+.pip-dot.live{background:var(--green);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}60%{opacity:.3}}
+.pip-lbl{font-size:.62rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--sub)}
+.pip-fps{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:.58rem;color:var(--muted)}
+.pip-body{position:relative;aspect-ratio:4/3}
+.pip-body video,.pip-body canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#pipOverlay{z-index:2;pointer-events:none}
+.pip-bar{position:absolute;bottom:0;left:0;right:0;height:5px;background:rgba(0,0,0,.5);z-index:3}
+.pip-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--green));
+  transition:width .07s linear;width:0%}
+.pip-tline{position:absolute;top:0;bottom:0;width:2px;background:var(--orange);z-index:4}
+.pip-start{position:absolute;inset:0;z-index:10;background:rgba(7,9,15,.87);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:10px;text-align:center}
+.pip-start p{font-size:.68rem;color:var(--sub);line-height:1.45}
+.pip-sbtn{background:var(--cyan);color:#07090f;border:none;border-radius:6px;padding:6px 14px;
+  font-family:'Space Grotesk',sans-serif;font-size:.72rem;font-weight:700;cursor:pointer;
+  transition:opacity .15s}
+.pip-sbtn:hover{opacity:.82}
+
+/* HUD */
+#gameHud{position:absolute;top:14px;right:14px;z-index:30;display:flex;flex-direction:column;gap:7px;align-items:flex-end}
+.hud-chip{background:rgba(13,17,23,.82);border:1px solid var(--border);backdrop-filter:blur(6px);
+  border-radius:8px;padding:5px 11px;font-family:'JetBrains Mono',monospace;font-size:.8rem;font-weight:700;
+  display:flex;align-items:center;gap:5px;}
+
+/* Game overlay */
+#gameOverlay{position:absolute;inset:0;z-index:20;background:rgba(7,9,15,.9);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  backdrop-filter:blur(3px)}
+.go-title{font-size:1.75rem;font-weight:700;letter-spacing:-.4px}
+.go-desc{color:var(--sub);font-size:.88rem;max-width:340px;text-align:center;line-height:1.6}
+.go-btn{background:var(--cyan);color:#07090f;border:none;border-radius:10px;padding:11px 30px;
+  font-family:'Space Grotesk',sans-serif;font-size:.93rem;font-weight:700;cursor:pointer;
+  transition:all .15s;letter-spacing:.3px;box-shadow:0 0 28px rgba(6,182,212,.3)}
+.go-btn:hover{transform:scale(1.04);box-shadow:0 0 38px rgba(6,182,212,.5)}
+.go-keys{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.kp{background:var(--card);border:1px solid var(--border);border-radius:6px;
+  padding:4px 9px;font-size:.73rem;color:var(--sub)}
+.kp b{color:var(--text)}
+
+/* Play bar */
+#playBar{position:absolute;bottom:0;left:0;right:0;z-index:30;display:flex;align-items:center;gap:11px;
+  padding:9px 14px;background:linear-gradient(transparent,rgba(7,9,15,.96))}
+#playBtn{background:var(--cyan);color:#07090f;border:none;border-radius:7px;padding:6px 18px;
+  font-family:'Space Grotesk',sans-serif;font-size:.8rem;font-weight:700;cursor:pointer;flex-shrink:0;transition:opacity .15s}
+#playBtn:hover{opacity:.85}
+.pb-title{font-size:.8rem;font-weight:600;color:var(--sub)}
+.pb-hint{font-size:.69rem;color:var(--muted);margin-left:auto}
+
+/* Toast */
+#toast{position:fixed;bottom:22px;right:22px;z-index:999;background:var(--card2);
+  border:1px solid var(--border);border-radius:10px;padding:10px 16px;
+  display:flex;gap:9px;align-items:center;box-shadow:0 8px 28px rgba(0,0,0,.55);
+  font-size:.82rem;transform:translateY(70px);opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1);pointer-events:none}
+#toast.show{transform:translateY(0);opacity:1}
+
+@media(max-width:680px){
+  #main{grid-template-columns:1fr}
+  #sidebar{display:none}
+  #camPip{width:110px}#camPip:hover{width:155px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<div id="topbar">
+  <div class="logo">Grip<b>Rehab</b></div>
+  <div class="topbar-sep"></div>
+  <span id="handStatus" class="pill" style="background:rgba(71,85,105,.15);border:1px solid rgba(71,85,105,.3);color:var(--muted)">⚬ No Hand</span>
+  <span id="fpsTag">— fps</span>
+  <span class="pill pill-green" style="font-size:.67rem">Physio Demo</span>
+</div>
+
+<div id="main">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <!-- Grip meter -->
+    <div id="gripMeterWrap">
+      <div class="sb-label">Grip Strength</div>
+      <div class="grip-arc-wrap">
+        <svg id="gripArcSvg" width="118" height="68" viewBox="0 0 118 68">
+          <path d="M9,64 A49,49 0 0,1 109,64" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="10" stroke-linecap="round"/>
+          <path id="gripArcPath" d="M9,64 A49,49 0 0,1 109,64" fill="none" stroke="url(#ag)" stroke-width="10" stroke-linecap="round"
+            stroke-dasharray="154" stroke-dashoffset="154" style="transition:stroke-dashoffset .08s linear"/>
+          <defs>
+            <linearGradient id="ag" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#06b6d4"/><stop offset="100%" stop-color="#22c55e"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="grip-arc-val">
+          <span class="pct" id="gripPct" style="color:var(--sub)">0%</span>
+          <span class="lbl">grip</span>
+        </div>
+      </div>
+      <div class="state-bar" id="stateBar">
+        <span class="dot" id="stateDot" style="background:var(--muted)"></span>
+        <span id="stateText" style="color:var(--muted)">No hand detected</span>
+      </div>
+      <!-- Threshold -->
+      <div class="thresh-row" style="margin-top:10px">
+        <span>Easy</span>
+        <input type="range" id="threshSlider" min="15" max="70" value="38" step="1">
+        <span>Hard</span>
+      </div>
+      <div class="thresh-note">
+        <span>Trigger threshold</span>
+        <span id="threshVal" style="color:var(--cyan);font-family:'JetBrains Mono',monospace">38%</span>
+      </div>
+    </div>
+
+    <!-- Session stats -->
+    <div class="sb-section" style="padding:10px 0 0">
+      <div class="sb-label" style="padding:0 14px">Session</div>
+      <div class="stat-row">
+        <div class="stat-box"><div class="v" id="sScore" style="color:var(--cyan)">0</div><div class="k">Score</div></div>
+        <div class="stat-box"><div class="v" id="sStreak" style="color:var(--orange)">0</div><div class="k">Streak</div></div>
+        <div class="stat-box"><div class="v" id="sMaxGrip" style="color:var(--green)">0%</div><div class="k">Peak</div></div>
+        <div class="stat-box"><div class="v" id="sTime" style="color:var(--rose)">0s</div><div class="k">Time</div></div>
+      </div>
+      <div class="rep-wrap">
+        <div class="rep-header">
+          <span style="color:var(--sub)">Reps</span>
+          <span id="repLabel" style="font-family:'JetBrains Mono',monospace;color:var(--cyan)">0 / 20</span>
+        </div>
+        <div class="rep-track"><div class="rep-fill" id="repFill" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <!-- Games -->
+    <div class="sb-section" style="padding-bottom:8px">
+      <div class="sb-label">Games</div>
+      <div class="game-list">
+        <div class="gc active" id="gc-flappy" onclick="selectGame('flappy')">
+          <div class="gicon">🐦</div><div><div class="gtitle">Grip Bird</div><div class="gsub">Grip to flap</div></div>
+        </div>
+        <div class="gc" id="gc-squeeze" onclick="selectGame('squeeze')">
+          <div class="gicon">🎯</div><div><div class="gtitle">Squeeze Target</div><div class="gsub">Precision hold</div></div>
+        </div>
+        <div class="gc" id="gc-bubble" onclick="selectGame('bubble')">
+          <div class="gicon">🫧</div><div><div class="gtitle">Bubble Pop</div><div class="gsub">Reaction speed</div></div>
+        </div>
+        <div class="gc" id="gc-balance" onclick="selectGame('balance')">
+          <div class="gicon">⚖️</div><div><div class="gtitle">Grip Balance</div><div class="gsub">Sustained hold</div></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="sb-btn" onclick="resetSession()">↺ Reset Session</button>
+
+    <div class="rehab-tip">
+      <div class="sb-label">Rehab Application</div>
+      <p id="rehabTip">Select a game to see its physiotherapy application.</p>
+    </div>
+  </div>
+
+  <!-- GAME AREA -->
+  <div id="gameArea">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Camera PiP (top-left, hover to enlarge) -->
+    <div id="camPip">
+      <div class="pip-top">
+        <div class="pip-dot" id="pipDot"></div>
+        <span class="pip-lbl">Camera</span>
+        <span class="pip-fps" id="pipFps">—</span>
+      </div>
+      <div class="pip-body">
+        <video id="webcam" autoplay muted playsinline></video>
+        <canvas id="pipOverlay"></canvas>
+        <div class="pip-start" id="pipStart">
+          <p>Enable camera for hand tracking</p>
+          <button class="pip-sbtn" onclick="startCamera()">Enable</button>
+        </div>
+      </div>
+      <div class="pip-bar">
+        <div class="pip-fill" id="pipFill"></div>
+        <div class="pip-tline" id="pipTLine" style="left:38%"></div>
+      </div>
+    </div>
+
+    <!-- Score HUD -->
+    <div id="gameHud">
+      <div class="hud-chip" style="color:var(--cyan)" id="hudScore">⭐ 0</div>
+      <div class="hud-chip" style="color:var(--orange);display:none" id="hudStreak">🔥 0</div>
+    </div>
+
+    <!-- Game start/pause overlay -->
+    <div id="gameOverlay">
+      <div class="go-title" id="goTitle">🐦 Grip Bird</div>
+      <div class="go-desc" id="goDesc">Grip your hand to make the bird flap up. Release to glide down. Fly through the gaps!</div>
+      <div class="go-keys" id="goKeys">
+        <span class="kp"><b>✊ Grip</b> = Flap Up</span>
+        <span class="kp"><b>🖐 Open</b> = Fall</span>
+        <span class="kp"><b>Space</b> = keyboard fallback</span>
+      </div>
+      <button class="go-btn" onclick="togglePlay()">▶ Start Game</button>
+    </div>
+
+    <!-- Bottom bar -->
+    <div id="playBar">
+      <button id="playBtn" onclick="togglePlay()">▶ Play</button>
+      <span class="pb-title" id="pbTitle">Grip Bird</span>
+      <span class="pb-hint" id="pbHint">✊ Grip = flap  •  Space = keyboard fallback</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="toast"><span id="toastIcon"></span><span id="toastText"></span></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  CORE STATE
+// ═══════════════════════════════════════════════════════════
+let cameraActive = false;
+let gripRaw = 0;         // 0–100, direct from landmarks
+let gripSmooth = 0;      // 0–100, smoothed display value
+let gripLevel = 0;       // exposed to games (0–100, smoothed)
+let gripThreshold = 38;  // % — user adjustable
+let isGripping = false;
+let prevGripping = false;
+let gripJustPressed = false;  // true for ONE frame when grip starts
+let gripJustReleased = false; // true for ONE frame when grip ends
+let sessionStart = null;
+let sessionReps = 0, sessionScore = 0, sessionStreak = 0, sessionMaxGrip = 0;
+let repGoal = 20;
+let gameRunning = false;
+let currentGame = 'flappy';
+let animFrameId = null;
+let fpsCount = 0, lastFpsTs = Date.now();
+let spaceHeld = false; // keyboard fallback
+
+// ═══════════════════════════════════════════════════════════
+//  GRIP DETECTION — Direct geometry, no auto-calibration flip
+// ═══════════════════════════════════════════════════════════
+/*
+  Single reliable metric: for each finger measure how much the
+  fingertip has curled TOWARD the palm base (landmark 0).
+
+  Key insight: we normalise by the hand's own size (wrist→middle MCP),
+  so the result is scale-invariant and camera-distance invariant.
+
+  Closed fist  → fingertips close to palm → ratio small → score HIGH
+  Open hand    → fingertips far from palm → ratio large → score LOW
+
+  No rolling calibration that can invert. Score is always:
+    0   = fully open
+    100 = fully closed
+*/
+
+function dist(a,b){ return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2); }
+let emaGrip = 0;
+
+function computeGrip(lm) {
+  // Hand scale reference: wrist (0) to middle-finger MCP (9)
+  const scale = dist(lm[0], lm[9]) + 1e-6;
+
+  // Fingertip landmarks: thumb=4, index=8, middle=12, ring=16, pinky=20
+  // Palm base = wrist landmark 0
+  const tips = [4, 8, 12, 16, 20];
+  let sumDist = 0;
+  for (const t of tips) sumDist += dist(lm[t], lm[0]);
+  const avgRatio = (sumDist / tips.length) / scale;
+
+  // Empirical bounds:
+  //   Open hand  → avgRatio ≈ 1.6–2.2
+  //   Closed fist → avgRatio ≈ 0.5–0.9
+  // Map: 1.8 → 0 (open), 0.6 → 100 (closed)
+  const OPEN_REF   = 1.8;
+  const CLOSED_REF = 0.6;
+  const raw = Math.max(0, Math.min(1, (OPEN_REF - avgRatio) / (OPEN_REF - CLOSED_REF)));
+  const score = Math.round(raw * 100);
+
+  // Smooth: fast to rise (fist), slower to fall (open)
+  const alpha = score > emaGrip ? 0.45 : 0.25;
+  emaGrip = emaGrip * (1 - alpha) + score * alpha;
+  return Math.round(emaGrip);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MEDIAPIPE
+// ═══════════════════════════════════════════════════════════
+async function startCamera() {
+  try {
+    toast('⏳','Loading hand model…');
+    const handsModel = new Hands({
+      locateFile: f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+    });
+    handsModel.setOptions({
+      maxNumHands:1, modelComplexity:1,
+      minDetectionConfidence:0.65, minTrackingConfidence:0.55
+    });
+    handsModel.onResults(onResults);
+    const video = document.getElementById('webcam');
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'user',width:320,height:240},audio:false
+    });
+    video.srcObject = stream;
+    await video.play();
+    const cam = new Camera(video,{
+      onFrame: async()=>{ await handsModel.send({image:video}); },
+      width:320, height:240
+    });
+    await cam.start();
+    cameraActive = true;
+    document.getElementById('pipStart').style.display='none';
+    document.getElementById('pipDot').classList.add('live');
+    toast('✅','Camera ready — show your hand and make a fist!');
+  } catch(e) {
+    toast('❌','Camera error: '+e.message);
+    console.error(e);
+  }
+}
+
+function onResults(results) {
+  // FPS
+  fpsCount++;
+  const now = Date.now();
+  if (now-lastFpsTs > 1000) {
+    document.getElementById('pipFps').textContent=fpsCount+' fps';
+    fpsCount=0; lastFpsTs=now;
+  }
+
+  const video = document.getElementById('webcam');
+  const canvas = document.getElementById('pipOverlay');
+  const ctx = canvas.getContext('2d');
+  canvas.width = video.videoWidth||320;
+  canvas.height = video.videoHeight||240;
+  // Mirror draw
+  ctx.save();ctx.scale(-1,1);
+  ctx.drawImage(results.image,-canvas.width,0,canvas.width,canvas.height);
+  ctx.restore();
+
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length>0) {
+    const lm = results.multiHandLandmarks[0];
+    gripLevel = computeGrip(lm);
+    gripSmooth = gripLevel;
+
+    if (gripLevel > sessionMaxGrip) sessionMaxGrip = gripLevel;
+    drawSkeleton(ctx, lm, canvas.width, canvas.height);
+    updateHandBadge(true);
+  } else {
+    // Decay when no hand
+    emaGrip = Math.max(0, emaGrip - 8);
+    gripLevel = Math.round(emaGrip);
+    gripSmooth = gripLevel;
+    updateHandBadge(false);
+  }
+  tickGripState();
+  updateGripUI();
+}
+
+function drawSkeleton(ctx, lm, W, H) {
+  const CONNS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
+    [0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],
+    [0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]];
+  const px=i=>(1-lm[i].x)*W, py=i=>lm[i].y*H;
+  ctx.lineWidth=1.8;
+  ctx.strokeStyle=isGripping?'rgba(6,182,212,.9)':'rgba(34,197,94,.8)';
+  for(const [a,b] of CONNS){ctx.beginPath();ctx.moveTo(px(a),py(a));ctx.lineTo(px(b),py(b));ctx.stroke()}
+  ctx.fillStyle=isGripping?'#06b6d4':'#22c55e';
+  for(const p of lm){ctx.beginPath();ctx.arc((1-p.x)*W,p.y*H,2.5,0,Math.PI*2);ctx.fill()}
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GRIP STATE MACHINE  (call once per frame)
+// ═══════════════════════════════════════════════════════════
+function tickGripState() {
+  const gripping = gripLevel >= gripThreshold;
+  gripJustPressed  = gripping && !prevGripping;
+  gripJustReleased = !gripping && prevGripping;
+  if (gripJustPressed) {
+    isGripping = true;
+    sessionReps++;
+    if (!sessionStart) sessionStart = Date.now();
+  }
+  if (gripJustReleased) isGripping = false;
+  isGripping = gripping; // continuous
+  prevGripping = gripping;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  UI UPDATES
+// ═══════════════════════════════════════════════════════════
+function updateHandBadge(detected) {
+  const dot=document.getElementById('stateDot');
+  const txt=document.getElementById('stateText');
+  const hs=document.getElementById('handStatus');
+  if (!detected) {
+    dot.style.background='var(--muted)';txt.style.color='var(--muted)';txt.textContent='No hand detected';
+    hs.className='pill';Object.assign(hs.style,{background:'rgba(71,85,105,.15)',border:'1px solid rgba(71,85,105,.3)',color:'var(--muted)'});
+    hs.textContent='⚬ No Hand';
+  } else if (isGripping) {
+    dot.style.background='var(--cyan)';txt.style.color='var(--cyan)';txt.textContent='✊ Gripping';
+    hs.className='pill pill-cyan';hs.style.cssText='';hs.textContent='✊ Gripping';
+  } else {
+    dot.style.background='var(--green)';txt.style.color='var(--green)';txt.textContent='🖐 Open';
+    hs.className='pill pill-green';hs.style.cssText='';hs.textContent='🖐 Open';
+  }
+}
+
+function updateGripUI() {
+  const pct=gripLevel;
+  document.getElementById('gripArcPath').style.strokeDashoffset=154-(pct/100)*154;
+  const pctEl=document.getElementById('gripPct');
+  pctEl.textContent=pct+'%';
+  pctEl.style.color=pct>=gripThreshold?'var(--cyan)':'var(--sub)';
+  document.getElementById('pipFill').style.width=pct+'%';
+  // Stats
+  document.getElementById('sScore').textContent=sessionScore;
+  document.getElementById('sStreak').textContent=sessionStreak;
+  document.getElementById('sMaxGrip').textContent=sessionMaxGrip+'%';
+  if (sessionStart) document.getElementById('sTime').textContent=Math.round((Date.now()-sessionStart)/1000)+'s';
+  document.getElementById('repLabel').textContent=sessionReps+' / '+repGoal;
+  document.getElementById('repFill').style.width=Math.min(100,sessionReps/repGoal*100)+'%';
+  // HUD
+  document.getElementById('hudScore').textContent='⭐ '+sessionScore;
+  const hs=document.getElementById('hudStreak');
+  if (sessionStreak>=3){hs.style.display='flex';hs.textContent='🔥 '+sessionStreak;}
+  else hs.style.display='none';
+}
+
+// Threshold slider
+document.getElementById('threshSlider').addEventListener('input',function(){
+  gripThreshold=parseInt(this.value);
+  document.getElementById('threshVal').textContent=gripThreshold+'%';
+  document.getElementById('pipTLine').style.left=gripThreshold+'%';
+});
+
+// ═══════════════════════════════════════════════════════════
+//  KEYBOARD FALLBACK (Space bar)
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'&&!e.repeat){
+    e.preventDefault();spaceHeld=true;
+    if(!cameraActive){
+      emaGrip=80;gripLevel=80;gripJustPressed=!prevGripping;
+      isGripping=true;prevGripping=true;
+      sessionReps++;if(!sessionStart)sessionStart=Date.now();
+      updateHandBadge(true);updateGripUI();
+    }
+  }
+});
+document.addEventListener('keyup',e=>{
+  if(e.code==='Space'){
+    spaceHeld=false;
+    if(!cameraActive){
+      emaGrip=0;gripLevel=0;gripJustReleased=true;
+      isGripping=false;prevGripping=false;
+      updateHandBadge(true);updateGripUI();
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  GAME MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+const META={
+  flappy:{icon:'🐦',title:'Grip Bird',goal:20,
+    desc:'Grip your hand to fly up. Release to fall. Navigate through the gaps!',
+    hint:'✊ Grip = fly up  •  🖐 Release = fall down  •  Space = keyboard',
+    rehab:'<b>Grip Initiation:</b> Repeated grip cycles rebuild corticospinal motor pathways — key for post-stroke hand rehab and tendon repair recovery in Thailand\'s rehabilitation hospitals.',
+    keys:[['✊ Grip','Fly Up'],['🖐 Release','Fall Down']]},
+  squeeze:{icon:'🎯',title:'Squeeze Target',goal:10,
+    desc:'Grip your hand to the highlighted target zone and hold it there for 2 seconds to score.',
+    hint:'✊ Grip into the orange zone and hold for 2 sec',
+    rehab:'<b>Force Modulation:</b> Generating a specific grip force trains fine motor control — used in OT for ADL tasks: holding utensils, writing, gripping a phone.',
+    keys:[['✊ Grip','Fill the bar'],['In orange zone','Hold 2 sec']]},
+  bubble:{icon:'🫧',title:'Bubble Pop',goal:15,
+    desc:'Bubbles float up — grip when a bubble enters the pop zone to burst it!',
+    hint:'Grip ONLY when bubble reaches the green zone',
+    rehab:'<b>Reaction Speed:</b> Training fast grip initiation targets reflex arcs — critical after stroke/nerve injury for catch-and-grasp tasks common in daily life.',
+    keys:[['✊ Grip','Pop Bubble'],['In Zone','Bubble must be inside green area']]},
+  balance:{icon:'⚖️',title:'Grip Balance',goal:30,
+    desc:'Grip at ~50% strength to keep the beam level. Grip harder = GRIP side goes down. No grip = FREE side drops!',
+    hint:'✊ Grip at ~50% to balance  •  Harder = tilts right  •  Release = tilts left',
+    rehab:'<b>Sustained Isometric Hold:</b> Holding a constant grip force trains endurance and precision — OT goal for jar-opening, tool use, and writing after hand injury.',
+    keys:[['✊ ~50% Grip','Level beam'],['Too hard/soft','Beam tilts']]},
+};
+
+function selectGame(name) {
+  if (gameRunning) { gameRunning=false; cancelAnimationFrame(animFrameId); document.getElementById('playBtn').textContent='▶ Play'; }
+  currentGame=name;
+  document.querySelectorAll('.gc').forEach(c=>c.classList.remove('active'));
+  document.getElementById('gc-'+name).classList.add('active');
+  const m=META[name];repGoal=m.goal;
+  document.getElementById('goTitle').textContent=m.icon+' '+m.title;
+  document.getElementById('goDesc').textContent=m.desc;
+  document.getElementById('goKeys').innerHTML=m.keys.map(([b,l])=>`<span class="kp"><b>${b}</b> = ${l}</span>`).join('');
+  document.getElementById('pbTitle').textContent=m.title;
+  document.getElementById('pbHint').textContent=m.hint;
+  document.getElementById('rehabTip').innerHTML=m.rehab;
+  document.getElementById('gameOverlay').style.display='flex';
+  document.querySelector('.go-btn').textContent='▶ Start Game';
+  GAMES[name].reset();
+}
+
+function togglePlay() {
+  if (gameRunning) {
+    gameRunning=false;cancelAnimationFrame(animFrameId);
+    document.getElementById('playBtn').textContent='▶ Play';
+    document.getElementById('gameOverlay').style.display='flex';
+    document.getElementById('goTitle').textContent='Paused';
+    document.getElementById('goDesc').textContent='Click Resume to continue.';
+    document.querySelector('.go-btn').textContent='▶ Resume';
+  } else {
+    gameRunning=true;
+    document.getElementById('playBtn').textContent='⏸ Pause';
+    document.getElementById('gameOverlay').style.display='none';
+    GAMES[currentGame].reset();
+    lastTs=performance.now();
+    requestAnimationFrame(gameLoop);
+  }
+}
+
+function resetSession() {
+  if(gameRunning)togglePlay();
+  sessionReps=0;sessionScore=0;sessionStreak=0;sessionMaxGrip=0;sessionStart=null;
+  GAMES[currentGame].reset();updateGripUI();toast('↺','Session reset');
+}
+
+let lastTs=0;
+function gameLoop(ts) {
+  if (!gameRunning) return;
+  const dt=Math.min(ts-lastTs,50);lastTs=ts;
+  const canvas=document.getElementById('gameCanvas');
+  const W=canvas.clientWidth,H=canvas.clientHeight;
+  canvas.width=W;canvas.height=H;
+  const ctx=canvas.getContext('2d');
+  // Keyboard fallback sync
+  if (!cameraActive) {
+    gripLevel=spaceHeld?80:0;
+    isGripping=spaceHeld;
+  }
+  GAMES[currentGame].update(dt,W,H);
+  GAMES[currentGame].draw(ctx,W,H);
+  gripJustPressed=false;gripJustReleased=false;
+  animFrameId=requestAnimationFrame(gameLoop);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DRAW HELPERS
+// ═══════════════════════════════════════════════════════════
+function gridBg(ctx,W,H,col='rgba(255,255,255,.022)'){
+  ctx.strokeStyle=col;ctx.lineWidth=1;const g=44;
+  for(let x=0;x<W;x+=g){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=g){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+}
+function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r)}
+function lerp(a,b,t){return a+(b-a)*t}
+
+// ═══════════════════════════════════════════════════════════
+//  GAME STATES
+// ═══════════════════════════════════════════════════════════
+let F={};  // flappy
+let SQ={}; // squeeze
+let BUB={}; // bubble
+let BAL={}; // balance
+
+const GAMES={
+// ─────────────────────────────────────
+// GRIP BIRD
+// ─────────────────────────────────────
+flappy:{
+  reset(){F={bY:0,bVy:0,pipes:[],pTimer:160,alive:true,score:0,dTimer:0,parts:[]}},
+  update(dt,W,H){
+    if(F.bY===0)F.bY=H/2;
+    if(!F.alive){
+      F.dTimer++;
+      F.parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.18;p.life-=1;});
+      F.parts=F.parts.filter(p=>p.life>0);
+      if(F.dTimer>100){GAMES.flappy.reset();F.bY=H/2;}
+      return;
+    }
+    const PIPE_SPEED=Math.min(4.0,2.2+F.score*0.04);
+    F.pTimer++;
+    // X spacing: timer 195 (~1.5x the previous 130)
+    // Y gap: max(370, 440) — 2x the previous max(185, 220)
+    if(F.pTimer>195){
+      F.pTimer=0;
+      const gap=Math.max(370,440-F.score*2); // 2x bigger vertical opening
+      const top=40+Math.random()*(H-gap-70);
+      F.pipes.push({x:W+30,top,gap,scored:false});
+    }
+    // Physics: GRIP = bird goes UP, RELEASE = bird falls DOWN
+    const GRAVITY=0.38;
+    const LIFT=-0.32;
+    const accel=isGripping?LIFT:GRAVITY;
+    F.bVy=Math.max(-6,Math.min(7,F.bVy+accel*(dt/16)));
+    F.bY+=F.bVy*(dt/16);
+    for(const p of F.pipes)p.x-=PIPE_SPEED*(dt/16);
+    for(const p of F.pipes){if(!p.scored&&p.x<125){p.scored=true;F.score++;sessionScore++;sessionStreak++;}}
+    F.pipes=F.pipes.filter(p=>p.x>-80);
+    // Collision (AABB vs bird circle r=13)
+    const bx=118,by=F.bY,br=13;
+    for(const p of F.pipes){
+      if(bx+br>p.x&&bx-br<p.x+50){
+        if(by-br<p.top||by+br>p.top+p.gap){kill();return;}
+      }
+    }
+    if(F.bY<0||F.bY>H)kill();
+    function kill(){
+      F.alive=false;F.dTimer=0;sessionStreak=0;
+      for(let i=0;i<22;i++)F.parts.push({x:bx,y:by,
+        vx:(Math.random()-.5)*7,vy:(Math.random()-.5)*7-2,
+        life:35+Math.random()*25,c:['#06b6d4','#22c55e','#f97316','#f1f5f9'][i%4]});
+    }
+  },
+  draw(ctx,W,H){
+    // Sky
+    const sky=ctx.createLinearGradient(0,0,0,H);
+    sky.addColorStop(0,'#090f1e');sky.addColorStop(1,'#0a1530');
+    ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+    gridBg(ctx,W,H,'rgba(6,182,212,.035)');
+    // Stars
+    ctx.fillStyle='rgba(255,255,255,.3)';
+    for(let i=0;i<50;i++){const sx=(i*173.5)%W,sy=(i*61.3)%(H*.6);ctx.beginPath();ctx.arc(sx,sy,i%7===0?1.3:.6,0,Math.PI*2);ctx.fill();}
+    // Pipes
+    for(const p of F.pipes){
+      // Top pipe
+      const g1=ctx.createLinearGradient(p.x,0,p.x+50,0);
+      g1.addColorStop(0,'#0c3d4a');g1.addColorStop(.5,'#0e7490');g1.addColorStop(1,'#0c3d4a');
+      ctx.fillStyle=g1;rr(ctx,p.x,0,50,p.top,[0,0,0,0]);ctx.fill();
+      ctx.fillStyle=g1;rr(ctx,p.x,p.top+p.gap,50,H-p.top-p.gap,[0,0,0,0]);ctx.fill();
+      // Caps
+      ctx.fillStyle='#0891b2';rr(ctx,p.x-5,p.top-16,60,16,4);ctx.fill();
+      ctx.fillStyle='#0891b2';rr(ctx,p.x-5,p.top+p.gap,60,16,4);ctx.fill();
+      // Pipe shine
+      ctx.fillStyle='rgba(255,255,255,.06)';ctx.fillRect(p.x+7,0,7,p.top);
+      ctx.fillStyle='rgba(255,255,255,.06)';ctx.fillRect(p.x+7,p.top+p.gap,7,H);
+    }
+    // Particles
+    for(const p of F.parts){ctx.globalAlpha=p.life/60;ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill();}
+    ctx.globalAlpha=1;
+    // Bird
+    const bx=118,by=F.bY;
+    ctx.save();ctx.translate(bx,by);
+    ctx.rotate(Math.max(-.6,Math.min(.55,F.bVy*.07)));
+    // Drop shadow
+    ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellipse(3,16,13,5,0,0,Math.PI*2);ctx.fill();
+    const bc=F.alive?(isGripping?'#06b6d4':'#f97316'):'#f43f5e';
+    const bg=ctx.createRadialGradient(-4,-4,2,0,0,16);
+    bg.addColorStop(0,isGripping?'#67e8f9':F.alive?'#fed7aa':'#fca5a5');
+    bg.addColorStop(1,bc);
+    ctx.fillStyle=bg;ctx.beginPath();ctx.ellipse(0,0,16,13,0,0,Math.PI*2);ctx.fill();
+    // Wing raised when gripping (going up), drooped when falling
+    ctx.fillStyle=isGripping?'#0284c7':F.alive?'#c2410c':'#dc2626';
+    ctx.beginPath();ctx.ellipse(-1,isGripping?-7:5,12,5,-.3,0,Math.PI*2);ctx.fill();
+    // Eye
+    ctx.fillStyle='#f8fafc';ctx.beginPath();ctx.arc(9,-4,5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#0f172a';ctx.beginPath();ctx.arc(10,-4,2.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(11,-5.5,1,0,Math.PI*2);ctx.fill();
+    // Beak
+    ctx.fillStyle='#fbbf24';ctx.beginPath();ctx.moveTo(15,0);ctx.lineTo(24,-2.5);ctx.lineTo(24,3.5);ctx.closePath();ctx.fill();
+    ctx.restore();
+    // Score chip
+    ctx.fillStyle='rgba(0,0,0,.45)';rr(ctx,W/2-34,10,68,34,8);ctx.fill();
+    ctx.fillStyle='#f1f5f9';ctx.font='bold 21px JetBrains Mono,monospace';ctx.textAlign='center';
+    ctx.fillText(F.score,W/2,33);
+    if(!F.alive&&F.dTimer<80){
+      ctx.fillStyle='rgba(7,9,15,.5)';ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#f43f5e';ctx.font='bold 34px Space Grotesk,sans-serif';ctx.textAlign='center';ctx.fillText('💥 Crashed!',W/2,H/2-10);
+      ctx.fillStyle='rgba(241,245,249,.55)';ctx.font='500 14px Space Grotesk,sans-serif';ctx.fillText('Restarting…',W/2,H/2+22);
+    }
+  }
+},
+
+// ─────────────────────────────────────
+// SQUEEZE TARGET
+// ─────────────────────────────────────
+squeeze:{
+  reset(){SQ={target:40+Math.random()*30,hold:0,state:'aim',count:0,flash:0,flashMax:50}},
+  update(dt,W,H){
+    if(SQ.state==='flash'){SQ.flash--;if(SQ.flash<=0){SQ.state='aim';SQ.target=35+Math.random()*40;}}
+    else{
+      const inZone=Math.abs(gripLevel-SQ.target)<20; // was 12 — much wider tolerance
+      // Only accumulate hold when actively gripping (grip=action)
+      if(inZone&&isGripping) SQ.hold=Math.min(60,SQ.hold+(dt/16));
+      else SQ.hold=Math.max(0,SQ.hold-0.8*(dt/16)); // slow decay was 2x
+      if(SQ.hold>=60){
+        SQ.count++;sessionScore+=10;sessionStreak++;sessionReps++;
+        if(!sessionStart)sessionStart=Date.now();
+        SQ.state='flash';SQ.flash=SQ.flashMax;SQ.hold=0;
+      }
+    }
+  },
+  draw(ctx,W,H){
+    ctx.fillStyle='#07090f';ctx.fillRect(0,0,W,H);
+    gridBg(ctx,W,H);
+    const flash=SQ.state==='flash';
+    const bx=W*.08,bw=W*.84,by=H*.44,bh=40; // wider bar (was bh=26, bx=.10, bw=.80)
+    // Track bg
+    ctx.fillStyle='rgba(255,255,255,.04)';rr(ctx,bx,by,bw,bh,10);ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.07)';ctx.lineWidth=1;rr(ctx,bx,by,bw,bh,10);ctx.stroke();
+    // Target zone — 20% wide (was 12%)
+    const tx=bx+(SQ.target/100)*bw,tz=bw*.20;
+    const tg=ctx.createLinearGradient(tx-tz,by,tx+tz,by+bh);
+    tg.addColorStop(0,'rgba(249,115,22,0)');tg.addColorStop(.5,flash?'rgba(34,197,94,.3)':'rgba(249,115,22,.28)');tg.addColorStop(1,'rgba(249,115,22,0)');
+    ctx.fillStyle=tg;rr(ctx,tx-tz,by,tz*2,bh,8);ctx.fill();
+    ctx.strokeStyle=flash?'#22c55e':'#f97316';ctx.lineWidth=2.5;rr(ctx,tx-tz,by,tz*2,bh,8);ctx.stroke();
+    // Target stem & label
+    ctx.fillStyle=flash?'#22c55e':'#f97316';
+    ctx.fillRect(tx-1,by-22,2,22);
+    ctx.font='700 12px JetBrains Mono,monospace';ctx.textAlign='center';
+    ctx.fillText('TARGET '+(SQ.target|0)+'%',tx,by-26);
+    // Zone range label
+    ctx.fillStyle='rgba(249,115,22,.55)';ctx.font='500 10px Space Grotesk,sans-serif';
+    ctx.fillText((Math.max(0,SQ.target-20)|0)+'%',tx-tz,by+bh+14);
+    ctx.fillText((Math.min(100,SQ.target+20)|0)+'%',tx+tz,by+bh+14);
+    // Grip fill
+    const gw=Math.max(0,Math.min(bw,(gripLevel/100)*bw));
+    const inZone=Math.abs(gripLevel-SQ.target)<20;
+    const gg=ctx.createLinearGradient(bx,0,bx+gw,0);
+    gg.addColorStop(0,inZone&&isGripping?'#22c55e':'#06b6d4');gg.addColorStop(1,inZone&&isGripping?'#15803d':'#0284c7');
+    ctx.fillStyle=gg;rr(ctx,bx,by,gw,bh,10);ctx.fill();
+    // Grip cursor line
+    if(gw>2){
+      ctx.fillStyle=inZone&&isGripping?'#22c55e':'#06b6d4';
+      ctx.fillRect(bx+gw-1.5,by,3,bh);
+      ctx.font='600 12px Space Grotesk,sans-serif';ctx.textAlign='center';
+      ctx.fillText(gripLevel+'%',bx+gw,by+bh+14);
+    }
+    // Hold ring (bigger, more visible)
+    if(SQ.hold>0&&!flash){
+      const cx=W/2,cy=by-95,r=38;
+      ctx.strokeStyle='rgba(255,255,255,.07)';ctx.lineWidth=9;
+      ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
+      ctx.strokeStyle=isGripping?'#22c55e':'#94a3b8';ctx.lineWidth=9;ctx.lineCap='round';
+      ctx.beginPath();ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+(SQ.hold/60)*Math.PI*2);ctx.stroke();
+      ctx.fillStyle='#f1f5f9';ctx.font='700 15px JetBrains Mono,monospace';ctx.textAlign='center';ctx.fillText(Math.round(SQ.hold/60*100)+'%',cx,cy+6);
+      ctx.fillStyle=isGripping?'#22c55e':'#475569';ctx.font='600 10px Space Grotesk,sans-serif';ctx.fillText(isGripping?'HOLDING':'RELEASE',cx,cy+20);
+    }
+    if(flash){
+      ctx.fillStyle='rgba(34,197,94,.07)';ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#22c55e';ctx.font='bold 38px Space Grotesk,sans-serif';ctx.textAlign='center';ctx.fillText('🎯 Perfect!',W/2,H*.28);
+      ctx.font='bold 20px JetBrains Mono,monospace';ctx.fillText('+10 pts',W/2,H*.28+40);
+    }
+    // Instruction bar
+    ctx.fillStyle='rgba(0,0,0,.35)';rr(ctx,bx,H*.82,bw,34,7);ctx.fill();
+    ctx.fillStyle='#94a3b8';ctx.font='500 12px Space Grotesk,sans-serif';ctx.textAlign='center';
+    ctx.fillText('Successes: '+SQ.count+'   ·   Grip and hold inside the orange zone for 2 seconds',W/2,H*.82+22);
+    // "Grip to activate" hint if not gripping
+    if(!isGripping){
+      ctx.fillStyle='rgba(249,115,22,.65)';ctx.font='600 13px Space Grotesk,sans-serif';ctx.textAlign='center';
+      ctx.fillText('✊ Grip your hand to start holding!',W/2,H*.72);
+    }
+  }
+},
+
+// ─────────────────────────────────────
+// BUBBLE POP
+// ─────────────────────────────────────
+bubble:{
+  reset(){BUB={bubbles:[],timer:0,score:0,missed:0}},
+  update(dt,W,H){
+    BUB.timer+=dt/16;
+    if(BUB.timer%50<dt/16*1.1)BUB.bubbles.push({
+      x:60+Math.random()*(W-120),y:H+45,
+      r:16+Math.random()*20,spd:.85+Math.random()*1.35,
+      hue:[180,160,32,0,268][Math.floor(Math.random()*5)],
+      popped:false,popT:0,
+    });
+    const zoneY=H*.30;
+    for(const b of BUB.bubbles){
+      if(b.popped){b.popT+=dt/16;continue;}
+      b.y-=b.spd*(dt/16);
+      // Use gripJustPressed (edge) so each grip = one pop action
+      if(gripJustPressed&&b.y<zoneY&&b.y>-b.r){
+        b.popped=true;BUB.score++;sessionScore+=5;sessionReps++;sessionStreak++;
+        if(!sessionStart)sessionStart=Date.now();
+      }
+    }
+    const esc=BUB.bubbles.filter(b=>!b.popped&&b.y<-b.r-20);
+    BUB.missed+=esc.length;if(esc.length)sessionStreak=0;
+    BUB.bubbles=BUB.bubbles.filter(b=>(!b.popped&&b.y>-b.r-20)||(b.popped&&b.popT<22));
+  },
+  draw(ctx,W,H){
+    const bg=ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#06101d');bg.addColorStop(1,'#091624');
+    ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+    gridBg(ctx,W,H,'rgba(6,182,212,.03)');
+    const zoneY=H*.30;
+    ctx.fillStyle=isGripping?'rgba(6,182,212,.07)':'rgba(34,197,94,.04)';ctx.fillRect(0,0,W,zoneY);
+    ctx.setLineDash([10,8]);ctx.strokeStyle=isGripping?'rgba(6,182,212,.55)':'rgba(34,197,94,.3)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(0,zoneY);ctx.lineTo(W,zoneY);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=isGripping?'rgba(6,182,212,.85)':'rgba(34,197,94,.55)';
+    ctx.font='600 11px Space Grotesk,sans-serif';ctx.textAlign='left';
+    ctx.fillText(isGripping?'✊ POP ZONE — Gripping!':'✊ POP ZONE — grip when bubble enters here',12,zoneY-8);
+    for(const b of BUB.bubbles){
+      if(b.popped){
+        ctx.globalAlpha=Math.max(0,1-b.popT/22);
+        for(let i=0;i<9;i++){
+          const a=i/9*Math.PI*2,d=b.popT*4;
+          ctx.fillStyle=`hsl(${b.hue},80%,65%)`;
+          ctx.beginPath();ctx.arc(b.x+Math.cos(a)*d,b.y+Math.sin(a)*d,3.5,0,Math.PI*2);ctx.fill();
+        }
+        ctx.globalAlpha=1;continue;
+      }
+      ctx.save();ctx.globalAlpha=.9;
+      const rg=ctx.createRadialGradient(b.x-b.r*.32,b.y-b.r*.32,b.r*.05,b.x,b.y,b.r);
+      rg.addColorStop(0,'rgba(255,255,255,.65)');
+      rg.addColorStop(.38,`hsla(${b.hue},80%,66%,.42)`);
+      rg.addColorStop(1,`hsla(${b.hue},80%,55%,.12)`);
+      ctx.fillStyle=rg;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle=`hsla(${b.hue},80%,65%,.65)`;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.stroke();
+      ctx.fillStyle='rgba(255,255,255,.4)';ctx.beginPath();ctx.arc(b.x-b.r*.3,b.y-b.r*.3,b.r*.23,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle='rgba(0,0,0,.38)';rr(ctx,12,12,124,54,8);ctx.fill();
+    ctx.fillStyle='#f1f5f9';ctx.font='bold 22px JetBrains Mono,monospace';ctx.textAlign='left';ctx.fillText('🫧 '+BUB.score,20,40);
+    ctx.fillStyle='#f43f5e';ctx.font='bold 13px Space Grotesk,sans-serif';ctx.fillText('Missed: '+BUB.missed,20,57);
+    if(!isGripping){ctx.fillStyle='rgba(34,197,94,.6)';ctx.font='600 12px Space Grotesk,sans-serif';ctx.textAlign='center';ctx.fillText('Grip when a bubble enters the green zone!',W/2,H-16);}
+  }
+},
+
+// ─────────────────────────────────────
+// GRIP BALANCE
+// ─────────────────────────────────────
+balance:{
+  reset(){BAL={angle:0,holdT:0,timer:0}},
+  update(dt,W,H){
+    BAL.timer+=dt/16;
+    // Grip = actively pushes GRIP side down (beam tilts toward balance when gripping at ~50%)
+    // No grip = beam falls to FREE side (gravity equivalent)
+    // Target: grip at ~50% to keep level. Gripping harder tilts GRIP side, not gripping tilts FREE side.
+    const diff=(gripLevel/100)-.5;
+    BAL.angle=BAL.angle+(diff*1.6-BAL.angle)*.038; // was *2.4 and .055 — much slower/gentler
+    BAL.angle=Math.max(-Math.PI/2.5,Math.min(Math.PI/2.5,BAL.angle));
+    const ok=Math.abs(BAL.angle)<.18; // was .09 — much wider "balanced" window
+    if(ok&&isGripping){
+      BAL.holdT+=dt/16;
+      if(BAL.holdT%28<dt/16*1.05){sessionScore++;sessionReps++;if(!sessionStart)sessionStart=Date.now();}
+    } else BAL.holdT=0;
+  },
+  draw(ctx,W,H){
+    ctx.fillStyle='#07090f';ctx.fillRect(0,0,W,H);
+    gridBg(ctx,W,H,'rgba(249,115,22,.022)');
+    const cx=W/2,cy=H*.43,L=Math.min(W*.37,195);
+    const ok=Math.abs(BAL.angle)<.18; // wider tolerance
+    // Pedestal
+    ctx.fillStyle='#1e293b';ctx.beginPath();ctx.moveTo(cx,cy+14);ctx.lineTo(cx-16,cy+62);ctx.lineTo(cx+16,cy+62);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#334155';rr(ctx,cx-45,cy+60,90,11,4);ctx.fill();
+    // Pivot
+    if(ok){ctx.shadowColor='#22c55e';ctx.shadowBlur=16;}
+    ctx.fillStyle=ok?'#22c55e':'#f97316';
+    ctx.beginPath();ctx.arc(cx,cy,11,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle=ok?'rgba(34,197,94,.3)':'rgba(249,115,22,.3)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(cx,cy,17,0,Math.PI*2);ctx.stroke();
+    // Beam
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(BAL.angle);
+    const bg2=ctx.createLinearGradient(-L,-6,L,-6);
+    if(ok){bg2.addColorStop(0,'#166534');bg2.addColorStop(.5,'#22c55e');bg2.addColorStop(1,'#166534');}
+    else{bg2.addColorStop(0,'#0e4f5c');bg2.addColorStop(.5,'#06b6d4');bg2.addColorStop(1,'#0e4f5c');}
+    ctx.fillStyle=bg2;rr(ctx,-L,-6,L*2,12,4);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.07)';rr(ctx,-L,-6,L*2,4,3);ctx.fill();
+    // End platforms + orbs
+    [[1,'#f97316','GRIP'],[-1,'#8b5cf6','FREE']].forEach(([sx,c,lbl])=>{
+      ctx.fillStyle=c;rr(ctx,sx*L-19,-24,38,18,5);ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.65)';ctx.font='bold 8px Space Grotesk,sans-serif';ctx.textAlign='center';ctx.fillText(lbl,sx*L,-12);
+      const og=ctx.createRadialGradient(sx*L-5,-48,3,sx*L,-44,18);
+      og.addColorStop(0,'rgba(255,255,255,.25)');og.addColorStop(1,c);
+      ctx.fillStyle=og;ctx.beginPath();ctx.arc(sx*L,-44,18,0,Math.PI*2);ctx.fill();
+    });
+    ctx.restore();
+    // Grip bar — wider target zone (20% instead of 10%)
+    const gbx=W*.09,gbw=W*.82,gby=H*.8,gbh=22; // taller bar (was 18)
+    ctx.fillStyle='rgba(255,255,255,.04)';rr(ctx,gbx,gby,gbw,gbh,8);ctx.fill();
+    const tz2=gbw*.15; // was .10 — 30% total zone width
+    const tg2=ctx.createLinearGradient(gbx+gbw*.5-tz2,gby,gbx+gbw*.5+tz2,gby+gbh);
+    tg2.addColorStop(0,'rgba(34,197,94,0)');tg2.addColorStop(.5,'rgba(34,197,94,.25)');tg2.addColorStop(1,'rgba(34,197,94,0)');
+    ctx.fillStyle=tg2;rr(ctx,gbx+gbw*.5-tz2,gby,tz2*2,gbh,5);ctx.fill();
+    ctx.strokeStyle='rgba(34,197,94,.5)';ctx.lineWidth=1.5;rr(ctx,gbx+gbw*.5-tz2,gby,tz2*2,gbh,5);ctx.stroke();
+    const gf2=ctx.createLinearGradient(gbx,0,gbx+(gripLevel/100)*gbw,0);
+    gf2.addColorStop(0,'#06b6d4');gf2.addColorStop(1,'#0284c7');
+    ctx.fillStyle=gf2;rr(ctx,gbx,gby,(gripLevel/100)*gbw,gbh,8);ctx.fill();
+    // Labels
+    ctx.fillStyle='#475569';ctx.font='500 11px Space Grotesk,sans-serif';ctx.textAlign='center';
+    ctx.fillText('✊ Grip at ~50% to level the beam',W/2,gby+gbh+16);
+    const gx=gbx+(gripLevel/100)*gbw;
+    ctx.fillStyle='#94a3b8';ctx.font='700 12px JetBrains Mono,monospace';
+    if(gripLevel>5)ctx.fillText(gripLevel+'%',Math.max(gbx+20,Math.min(gbx+gbw-20,gx)),gby-7);
+    // Balanced feedback
+    if(ok&&isGripping){ctx.fillStyle='rgba(34,197,94,.12)';ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#22c55e';ctx.font='bold 15px Space Grotesk,sans-serif';ctx.textAlign='center';
+      ctx.fillText('✓ Balanced! +1 pt',W/2,cy-L*.75-20);}
+    // Hint when not gripping
+    if(!isGripping){
+      ctx.fillStyle='rgba(249,115,22,.65)';ctx.font='600 13px Space Grotesk,sans-serif';ctx.textAlign='center';
+      ctx.fillText('✊ Grip your hand to control the beam!',W/2,cy+90);
+    }
+  }
+}
+};
+
+// ═══════════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════════
+let _toastT=null;
+function toast(icon,msg,dur=3200){
+  clearTimeout(_toastT);
+  document.getElementById('toastIcon').textContent=icon;
+  document.getElementById('toastText').textContent=msg;
+  document.getElementById('toast').classList.add('show');
+  _toastT=setTimeout(()=>document.getElementById('toast').classList.remove('show'),dur);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+selectGame('flappy');
+window.addEventListener('resize',()=>{const c=document.getElementById('gameCanvas');c.width=c.clientWidth;c.height=c.clientHeight;});
+setInterval(()=>{if(sessionStart)document.getElementById('sTime').textContent=Math.round((Date.now()-sessionStart)/1000)+'s';},500);
+</script>
+</body>
+</html>

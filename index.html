@@ -852,7 +852,7 @@ squeeze:{
   update(dt,W,H){
     if(SQ.state==='flash'){SQ.flash--;if(SQ.flash<=0){SQ.state='aim';SQ.target=35+Math.random()*40;}}
     else{
-      const inZone=Math.abs(gripLevel-SQ.target)<20;
+      const inZone=Math.abs(gripLevel-SQ.target)<10;
       if(inZone&&isGripping) SQ.hold=Math.min(60,SQ.hold+(dt/16));
       else SQ.hold=Math.max(0,SQ.hold-0.8*(dt/16));
       if(SQ.hold>=60){
@@ -866,10 +866,10 @@ squeeze:{
     ctx.fillStyle='#07090f';ctx.fillRect(0,0,W,H);
     gridBg(ctx,W,H);
     const flash=SQ.state==='flash';
-    const bx=W*.12,bw=W*.76,by=H*.44,bh=28;
+    const bx=W*.08,bw=W*.84,by=H*.44,bh=40;
     ctx.fillStyle='rgba(255,255,255,.04)';rr(ctx,bx,by,bw,bh,10);ctx.fill();
     ctx.strokeStyle='rgba(255,255,255,.07)';ctx.lineWidth=1;rr(ctx,bx,by,bw,bh,10);ctx.stroke();
-    const tx=bx+(SQ.target/100)*bw,tz=bw*.20;
+    const tx=bx+(SQ.target/100)*bw,tz=bw*.10;
     const tg=ctx.createLinearGradient(tx-tz,by,tx+tz,by+bh);
     tg.addColorStop(0,'rgba(249,115,22,0)');tg.addColorStop(.5,flash?'rgba(34,197,94,.3)':'rgba(249,115,22,.28)');tg.addColorStop(1,'rgba(249,115,22,0)');
     ctx.fillStyle=tg;rr(ctx,tx-tz,by,tz*2,bh,8);ctx.fill();
@@ -879,10 +879,10 @@ squeeze:{
     ctx.font='700 12px JetBrains Mono,monospace';ctx.textAlign='center';
     ctx.fillText('TARGET '+(SQ.target|0)+'%',tx,by-26);
     ctx.fillStyle='rgba(249,115,22,.55)';ctx.font='500 10px Space Grotesk,sans-serif';
-    ctx.fillText((Math.max(0,SQ.target-20)|0)+'%',tx-tz,by+bh+14);
-    ctx.fillText((Math.min(100,SQ.target+20)|0)+'%',tx+tz,by+bh+14);
+    ctx.fillText((Math.max(0,SQ.target-10)|0)+'%',tx-tz,by+bh+14);
+    ctx.fillText((Math.min(100,SQ.target+10)|0)+'%',tx+tz,by+bh+14);
     const gw=Math.max(0,Math.min(bw,(gripLevel/100)*bw));
-    const inZone=Math.abs(gripLevel-SQ.target)<20;
+    const inZone=Math.abs(gripLevel-SQ.target)<10;
     const gg=ctx.createLinearGradient(bx,0,bx+gw,0);
     gg.addColorStop(0,inZone&&isGripping?'#22c55e':'#06b6d4');gg.addColorStop(1,inZone&&isGripping?'#15803d':'#0284c7');
     ctx.fillStyle=gg;rr(ctx,bx,by,gw,bh,10);ctx.fill();

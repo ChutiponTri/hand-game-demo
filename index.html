@@ -779,10 +779,20 @@ flappy:{
       const top=40+Math.random()*(H-gap-70);
       F.pipes.push({x:W+30,top,gap,scored:false});
     }
-    const GRAVITY=0.15;
-    const LIFT=-0.2;
-    const accel=isGripping?LIFT:GRAVITY;
-    F.bVy=Math.max(-6,Math.min(7,F.bVy+accel*(dt/16)));
+    // const GRAVITY=0.15;
+    // const LIFT=-0.2;
+    // const accel=isGripping?LIFT:GRAVITY;
+    // F.bVy=Math.max(-6,Math.min(7,F.bVy+accel*(dt/16)));
+
+    const GRAVITY=0.1;
+    if(gripJustPressed){
+      F.bVy=-3; // instant velocity snap — zero delay
+    } else if(gripJustReleased){
+      F.bVy=2; // instant downward snap on release — tune 1~5
+    } else if(!isGripping){
+      F.bVy=2;
+    }
+
     F.bY+=F.bVy*(dt/16);
     for(const p of F.pipes)p.x-=PIPE_SPEED*(dt/16);
     for(const p of F.pipes){if(!p.scored&&p.x<125){p.scored=true;F.score++;sessionScore++;sessionStreak++;}}
